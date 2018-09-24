@@ -1,8 +1,11 @@
 package com.company;
 
+
 import java.io.IOException;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.util.ArrayList;
+import java.util.Optional;
 import java.util.Scanner;
 import java.util.function.Function;
 
@@ -26,7 +29,21 @@ public class MultiThreadedComputation {
             }
         };
     }
-    static public int computeFunctions(Function<Integer, Integer> f, Function<Integer, Integer> g, int arg1, int arg2) {
+    private String errorString;
+    private String computationTimeString;
+
+    public String getErrorString() {
+        return errorString;
+    }
+
+    public String getComputationTimeString() {
+        return computationTimeString;
+    }
+
+    public Optional<Integer> computeFunctions(Function<Integer, Integer> f, Function<Integer, Integer> g, int arg1, int arg2) {
+
+        errorString = "";
+        computationTimeString = "";
 
         PipedInputStream[] inputStreams = new PipedInputStream[]{
                 new PipedInputStream(), new PipedInputStream()
@@ -42,7 +59,7 @@ public class MultiThreadedComputation {
             }
         } catch (IOException e) {
             System.out.println("Error");
-            return -1;
+            return Optional.empty();
         }
         Runnable fR = createRunnableFromFunc(f, arg1, outputStreams[0]);
         Runnable gR = createRunnableFromFunc(g, arg2, outputStreams[1]);
@@ -55,41 +72,44 @@ public class MultiThreadedComputation {
         for (int i = 0; i < 2; i++)
             threads[i].start();
 
-        int[] vals = {
-                -1, -1
-        };
-        int result = -1;
+        ArrayList<Optional<Integer>> vals = new ArrayList<>();
+        vals.add(Optional.empty());
+        vals.add(Optional.empty());
+
+        Optional<Integer> result = Optional.empty();
         try {
-            long timer = 0;
-            long computation_time = 0;
-            boolean prompt_enabled = true;
-            boolean result_obtained = false;
+            long timerStart = System.nanoTime(), timer = 0;
+
+            long computationTime = 0, computationStart = System.nanoTime();
+            boolean promptEnabled = true;
+            boolean resultObtained = false;
             boolean terminate = false;
-            while (!result_obtained) {
+            while (!resultObtained) {
                 long start = System.nanoTime();
                 for (int i = 0; i < 2; i++) {
-                    if (inputStreams[i].available() >= 4 && vals[i] == -1) {
+                    if (!vals.get(i).isPresent() && inputStreams[i].available() >= 4) {
 
-                        vals[i] = IOOperations.getInt(inputStreams[i]);
-                        System.out.printf("%d: %d\n", i + 1, vals[i]);
-                        if (vals[i] == BinaryOperation.getZeroValue()) {
-                            result = BinaryOperation.getZeroResult();
-                            result_obtained = true;
-                        } else if (vals[0] != -1 && vals[1] != -1) {
-                            result = BinaryOperation.calculate(vals[0], vals[1]);
-                            result_obtained = true;
+                        vals.set(i, Optional.of(IOOperations.getInt(inputStreams[i])));
+                        if (vals.get(i).get().equals(BinaryOperation.getZeroValue())) {
+                            result = Optional.of(BinaryOperation.getZeroResult());
+                            resultObtained = true;
+                            break;
+                        } else if (vals.get(0).isPresent() && vals.get(1).isPresent()) {
+                            result = Optional.of(BinaryOperation.calculate(vals.get(0).get(), vals.get(1).get()));
+                            resultObtained = true;
+                            break;
                         }
                     }
                 }
 
-                if (terminate || result_obtained)
+                if (terminate || resultObtained)
                     break;
+
                 Thread.sleep(100);
 
-                long time_lapsed = System.nanoTime() - start;
-                timer += time_lapsed;
+                timer = System.nanoTime() - timerStart;
 
-                if (prompt_enabled && timer / 1_000_000_000 >= 5) {
+                if (promptEnabled && timer / 1_000_000_000 >= 5) {
                     System.out.println("(C)ontinue, Continue (W)ithout prompt, (T)erminate:");
                     String choice;
                     do {
@@ -97,28 +117,37 @@ public class MultiThreadedComputation {
                         choice = input.next().toLowerCase();
                     } while (choice.equals("c") && choice.equals("w") && choice.equals("t"));
                     if (choice.equals("w")) {
-                        prompt_enabled = false;
+                        promptEnabled = false;
                     } else if (choice.equals("t")) {
-                        //tresult = -1;
                         terminate = true;
                     }
-                    timer = 0;
+                    timer = System.nanoTime();
                 }
-                computation_time += System.nanoTime() - start;
 
             }
-
-
             for (int i = 0; i < 2; i++) {
                 threads[i].interrupt();
                 inputStreams[i].close();
                 outputStreams[i].close();
             }
-            System.out.printf(Main.ANSI_YELLOW + "Computation took %f s\n" +  Main.ANSI_RESET, (double)computation_time / 1_000_000_000);
+            if (terminate && !result.isPresent()) {
+                boolean comma = false;
+                if (!vals.get(0).isPresent()) {
+                    errorString += "f was not computed";
+                    comma = true;
+                }
+                if (!vals.get(1).isPresent()) {
+                    if (comma)
+                        errorString += ", ";
+                    errorString += "g was not computed";
+                }
+            }
+            computationTime = System.nanoTime() - computationStart;
+            computationTimeString = String.format(Main.ANSI_YELLOW + "Computation took %f s\n" +  Main.ANSI_RESET, (double)computationTime / 1_000_000_000);
             return result;
         } catch (InterruptedException | IOException e) {
             e.printStackTrace();
         }
-        return -1;
+        return Optional.empty();
     }
 }

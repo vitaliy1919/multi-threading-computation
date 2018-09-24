@@ -5,6 +5,7 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Scanner;
 import java.util.function.Function;
 
@@ -61,19 +62,21 @@ public class Main {
             return -1;
         };
 
-        int argsF[] = {1, 2, 0, -1, 3, -1, 10};
-        int argsG[] = {2, 1, -1, 0, -1, 2, 9};
+        int argsF[] = {1, 2, 0, -1, 3, -1, 10, 9};
+        int argsG[] = {2, 1, -1, 0, -1, 2, 9, 10};
         // delayF = {1000, 1500, 500, INF, 2000, INF, 5500}
-        // delayG = {1500, 100, INF, 500, INF, 1500, 5000}
+        // delayG = {1500, 1000, INF, 500, INF, 1500, 5000}
         // resF = {1, 2, 0, no, 3, no, 10}
         // resG = {2, 1, no, 0, no, 2, 9};
+        MultiThreadedComputation computation = new MultiThreadedComputation();
         for (int i = 0; i < argsF.length; i++) {
             System.out.printf(ANSI_GREEN + "Test #%d:\n" + ANSI_RESET, i+1);
-            int result = MultiThreadedComputation.computeFunctions(f, g, argsF[i], argsG[i]);
-            if (result != -1)
-                System.out.printf("The result of calculation is: %d\n", result);
+            Optional<Integer> result = computation.computeFunctions(f, g, argsF[i], argsG[i]);
+            if (result.isPresent())
+                System.out.printf("The result of calculation is: %d\n", result.get());
             else
-                System.out.println("The operation canceled by user");
+                System.out.printf("The operation canceled by user. Reason: %s", computation.getErrorString());
+            System.out.print(computation.getComputationTimeString());
         }
 
     }
